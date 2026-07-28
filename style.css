@@ -113,6 +113,15 @@ main {
   gap: 0.4rem;
 }
 
+.view-toggle {
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
 .indent-label select {
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
@@ -179,6 +188,12 @@ main {
   min-height: 350px;
 }
 
+#input.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: var(--error-bg);
+}
+
 .output {
   flex: 1;
   margin: 0;
@@ -190,6 +205,56 @@ main {
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 350px;
+}
+
+.tree-output {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.tree-node {
+  margin-left: 0.3rem;
+}
+
+.tree-node > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.tree-node > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree-node > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+}
+
+.tree-node[open] > summary::before {
+  content: "▾";
+}
+
+.tree-children {
+  margin-left: 1.1rem;
+  border-left: 1px solid var(--border);
+  padding-left: 0.6rem;
+}
+
+.tree-leaf {
+  margin-left: 1.5rem;
+  padding: 0.05rem 0;
+}
+
+.tree-bracket {
+  color: var(--muted);
+}
+
+.tree-empty {
+  margin-left: 1.5rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .jkey { color: #a626a4; }

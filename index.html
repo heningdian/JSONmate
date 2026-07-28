@@ -18,6 +18,9 @@
       <button id="minifyBtn" title="Remove all whitespace">Minify</button>
       <button id="validateBtn" title="Check validity without changing input">Validate</button>
       <button id="copyBtn" title="Copy output to clipboard">Copy</button>
+      <button id="downloadBtn" title="Download output as .json file">Download</button>
+      <button id="uploadBtn" title="Open a .json file">Open File</button>
+      <input type="file" id="fileInput" accept=".json,application/json" class="hidden">
       <button id="clearBtn" title="Clear input and output">Clear</button>
       <label class="indent-label">
         Indent:
@@ -27,6 +30,10 @@
           <option value="tab">Tab</option>
         </select>
       </label>
+      <label class="view-toggle">
+        <input type="checkbox" id="treeToggle">
+        Tree view
+      </label>
     </section>
 
     <section class="panels">
@@ -35,7 +42,7 @@
           <span>Input</span>
           <span id="inputStats" class="stats"></span>
         </div>
-        <textarea id="input" spellcheck="false" placeholder="Paste your JSON here..."></textarea>
+        <textarea id="input" spellcheck="false" placeholder="Paste, type, or drag &amp; drop a .json file here..."></textarea>
       </div>
 
       <div class="panel">
@@ -44,6 +51,7 @@
           <span id="status" class="status"></span>
         </div>
         <pre id="output" class="output" aria-live="polite"></pre>
+        <div id="treeOutput" class="output tree-output hidden"></div>
       </div>
     </section>
 
