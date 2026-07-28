@@ -511,5 +511,19 @@ footer {
   text-align: center;
   padding: 1rem;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+footer p {
+  margin: 0.2rem 0;
+}
+
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
