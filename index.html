@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSONmate — JSON Formatter &amp; Validator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>JSONmate</h1>
+    <p class="tagline">Format, validate, and explore JSON</p>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <button id="formatBtn" title="Pretty-print with 2-space indent">Format</button>
+      <button id="minifyBtn" title="Remove all whitespace">Minify</button>
+      <button id="validateBtn" title="Check validity without changing input">Validate</button>
+      <button id="copyBtn" title="Copy output to clipboard">Copy</button>
+      <button id="downloadBtn" title="Download output as .json file">Download</button>
+      <button id="uploadBtn" title="Open a .json file">Open File</button>
+      <input type="file" id="fileInput" accept=".json,application/json" class="hidden">
+      <button id="clearBtn" title="Clear input and output">Clear</button>
+      <label class="indent-label">
+        Indent:
+        <select id="indentSelect">
+          <option value="2" selected>2 spaces</option>
+          <option value="4">4 spaces</option>
+          <option value="tab">Tab</option>
+        </select>
+      </label>
+      <label class="view-toggle">
+        <input type="checkbox" id="treeToggle">
+        Tree view
+      </label>
+    </section>
+
+    <section class="panels">
+      <div class="panel">
+        <div class="panel-header">
+          <span>Input</span>
+          <span id="inputStats" class="stats"></span>
+        </div>
+        <textarea id="input" spellcheck="false" placeholder="Paste, type, or drag &amp; drop a .json file here..."></textarea>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>Output</span>
+          <span id="status" class="status"></span>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Search text, or JSONPath e.g. $.users[0].name">
+          <span id="searchCount" class="search-count"></span>
+          <button id="searchPrev" title="Previous match">&uarr;</button>
+          <button id="searchNext" title="Next match">&darr;</button>
+        </div>
+        <div id="searchResults" class="search-results hidden"></div>
+        <pre id="output" class="output" aria-live="polite"></pre>
+        <div id="treeOutput" class="output tree-output hidden"></div>
+      </div>
+    </section>
+
+    <section id="errorBox" class="error-box hidden"></section>
+
+    <section class="extra-tools">
+      <details id="schemaSection" class="tool-section">
+        <summary>JSON Schema Validation</summary>
+        <div class="tool-body">
+          <textarea id="schemaInput" spellcheck="false" placeholder='Paste a JSON Schema here, e.g. {"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}'></textarea>
+          <div class="tool-actions">
+            <button id="schemaValidateBtn">Validate Against Schema</button>
+          </div>
+          <div id="schemaResult" class="tool-result"></div>
+        </div>
+      </details>
+
+      <details id="diffSection" class="tool-section">
+        <summary>Diff / Compare</summary>
+        <div class="tool-body">
+          <textarea id="compareInput" spellcheck="false" placeholder="Paste JSON to compare against the Input panel..."></textarea>
+          <div class="tool-actions">
+            <button id="diffBtn">Compare</button>
+          </div>
+          <div id="diffResult" class="tool-result"></div>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Runs entirely in your browser — nothing is uploaded.</p>
+  </footer>
+
+<script src="app.js"></script>
+</body>
+</html>
