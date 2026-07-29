@@ -19,8 +19,8 @@
       <button id="validateBtn" title="Check validity without changing input">Validate</button>
       <button id="copyBtn" title="Copy output to clipboard">Copy</button>
       <button id="downloadBtn" title="Download output as .json file">Download</button>
-      <button id="uploadBtn" title="Open a file: .json, .csv, .xml, .yaml, .yml, .ini, .txt, or .docx — converted to JSON automatically">Open File</button>
-      <input type="file" id="fileInput" accept=".json,.csv,.xml,.yaml,.yml,.ini,.txt,.docx" class="hidden">
+      <button id="uploadBtn" title="Open a file — JSON, CSV, TSV, XML, YAML, INI/CONF, TXT, LOG, MD, HTML, SRT, VTT, RTF, DOCX, or PDF — converted to JSON automatically">Open File</button>
+      <input type="file" id="fileInput" accept=".json,.csv,.tsv,.xml,.yaml,.yml,.ini,.conf,.txt,.log,.md,.markdown,.html,.htm,.srt,.vtt,.rtf,.docx,.pdf" class="hidden">
       <button id="clearBtn" title="Clear input and output">Clear</button>
       <label class="indent-label">
         Indent:
@@ -42,7 +42,7 @@
           <span>Input</span>
           <span id="inputStats" class="stats"></span>
         </div>
-        <textarea id="input" spellcheck="false" placeholder="Paste JSON, or drag &amp; drop a .json/.csv/.xml/.yaml/.ini/.txt/.docx file — auto-converted to JSON..."></textarea>
+        <textarea id="input" spellcheck="false" placeholder="Paste JSON, or drag &amp; drop a file (CSV, TSV, XML, YAML, INI, TXT, LOG, MD, HTML, SRT, VTT, RTF, DOCX, PDF) — auto-converted to JSON..."></textarea>
       </div>
 
       <div class="panel">
@@ -90,11 +90,12 @@
       <details id="convertSection" class="tool-section">
         <summary>Export As</summary>
         <div class="tool-body">
-          <p class="tool-note">Converts the Input JSON to another format and downloads it. DOCX is import-only (via Open File) — generating a Word document from arbitrary JSON isn't a defined conversion.</p>
+          <p class="tool-note">Converts the Input JSON to another format and downloads it. DOCX, PDF, RTF, HTML, Markdown, LOG, SRT, and VTT are import-only (via Open File) — generating those from arbitrary JSON isn't a defined conversion.</p>
           <label class="indent-label">
             Format:
             <select id="exportFormat">
               <option value="csv">CSV</option>
+              <option value="tsv">TSV</option>
               <option value="xml">XML</option>
               <option value="yaml">YAML</option>
               <option value="ini">INI</option>

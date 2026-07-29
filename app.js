@@ -262,9 +262,9 @@
     URL.revokeObjectURL(url);
   }
 
-  // --- CSV <-> JSON ---
+  // --- CSV / TSV <-> JSON ---
 
-  function parseCsvRows(text) {
+  function parseDelimitedRows(text, delim) {
     const rows = [];
     let row = [];
     let field = '';
@@ -280,7 +280,7 @@
         }
       } else if (c === '"') {
         inQuotes = true;
-      } else if (c === ',') {
+      } else if (c === delim) {
         row.push(field); field = '';
       } else if (c === '\r') {
         // skip
@@ -294,8 +294,7 @@
     return rows.filter(r => !(r.length === 1 && r[0] === ''));
   }
 
-  function csvToJson(text) {
-    const rows = parseCsvRows(text);
+  function delimitedRowsToJson(rows) {
     if (!rows.length) return [];
     const headers = rows[0];
     return rows.slice(1).map(r => {
@@ -305,12 +304,15 @@
     });
   }
 
-  function csvEscapeField(v) {
+  function csvToJson(text) { return delimitedRowsToJson(parseDelimitedRows(text, ',')); }
+  function tsvToJson(text) { return delimitedRowsToJson(parseDelimitedRows(text, '\t')); }
+
+  function delimEscapeField(v, delim) {
     const s = v === null || v === undefined ? '' : String(v);
-    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    return new RegExp(`["${delim}\\n\\r]`).test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  function jsonToCsv(data) {
+  function jsonToDelimited(data, delim, label) {
     const arr = Array.isArray(data) ? data : [data];
     if (!arr.length) return '';
     const headerSet = new Set();
@@ -318,16 +320,19 @@
       if (row !== null && typeof row === 'object' && !Array.isArray(row)) Object.keys(row).forEach(k => headerSet.add(k));
     });
     const headers = [...headerSet];
-    if (!headers.length) throw new Error('JSON must be an array of objects to convert to CSV');
-    const lines = [headers.map(csvEscapeField).join(',')];
+    if (!headers.length) throw new Error(`JSON must be an array of objects to convert to ${label}`);
+    const lines = [headers.map(h => delimEscapeField(h, delim)).join(delim)];
     arr.forEach(row => {
       lines.push(headers.map(h => {
         const v = row && typeof row === 'object' ? row[h] : undefined;
-        return csvEscapeField(v !== null && typeof v === 'object' ? JSON.stringify(v) : v);
-      }).join(','));
+        return delimEscapeField(v !== null && typeof v === 'object' ? JSON.stringify(v) : v, delim);
+      }).join(delim));
     });
     return lines.join('\r\n');
   }
+
+  function jsonToCsv(data) { return jsonToDelimited(data, ',', 'CSV'); }
+  function jsonToTsv(data) { return jsonToDelimited(data, '\t', 'TSV'); }
 
   // --- XML <-> JSON (via native DOMParser / XMLSerializer) ---
 
@@ -643,18 +648,322 @@
     );
   }
 
+  // --- LOG -> JSON (array of lines) ---
+
+  function logToJson(text) {
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    return lines;
+  }
+
+  // --- Markdown -> JSON (block list: headings, paragraphs, lists, code, blockquotes, hr) ---
+
+  function markdownToJson(text) {
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+    const blocks = [];
+    let paraBuf = [];
+    const flushPara = () => {
+      if (paraBuf.length) { blocks.push({ type: 'paragraph', text: paraBuf.join(' ').trim() }); paraBuf = []; }
+    };
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading) { flushPara(); blocks.push({ type: 'heading', level: heading[1].length, text: heading[2].trim() }); i++; continue; }
+      if (/^```/.test(line)) {
+        flushPara();
+        const lang = line.slice(3).trim();
+        const codeLines = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) { codeLines.push(lines[i]); i++; }
+        i++;
+        blocks.push({ type: 'code', lang: lang || null, text: codeLines.join('\n') });
+        continue;
+      }
+      if (/^>\s?/.test(line)) {
+        flushPara();
+        const quoteLines = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) { quoteLines.push(lines[i].replace(/^>\s?/, '')); i++; }
+        blocks.push({ type: 'blockquote', text: quoteLines.join('\n') });
+        continue;
+      }
+      if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+        flushPara();
+        const ordered = /^\s*\d+\.\s+/.test(line);
+        const items = [];
+        while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
+          items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '').trim());
+          i++;
+        }
+        blocks.push({ type: 'list', ordered, items });
+        continue;
+      }
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); blocks.push({ type: 'hr' }); i++; continue; }
+      if (line.trim() === '') { flushPara(); i++; continue; }
+      paraBuf.push(line.trim());
+      i++;
+    }
+    flushPara();
+    return blocks;
+  }
+
+  // --- HTML -> JSON (via native DOMParser, tag/attributes/children tree) ---
+
+  function htmlNodeToJson(node) {
+    const el = { tag: node.tagName.toLowerCase() };
+    if (node.attributes && node.attributes.length) {
+      el.attributes = {};
+      for (const attr of node.attributes) el.attributes[attr.name] = attr.value;
+    }
+    const children = [];
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent.replace(/\s+/g, ' ').trim();
+        if (t) children.push(t);
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        children.push(htmlNodeToJson(child));
+      }
+    }
+    if (children.length) el.children = children;
+    return el;
+  }
+
+  function htmlToJson(text) {
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    return htmlNodeToJson(doc.body || doc.documentElement);
+  }
+
+  // --- SRT -> JSON (subtitle cues) ---
+
+  function srtToJson(text) {
+    const blocks = text.replace(/\r\n/g, '\n').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    return blocks.map(block => {
+      const lines = block.split('\n');
+      let idx = 0;
+      let index = null;
+      if (/^\d+$/.test(lines[0].trim())) { index = parseInt(lines[0].trim(), 10); idx = 1; }
+      const timeMatch = lines[idx] && lines[idx].match(/(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})/);
+      const start = timeMatch ? timeMatch[1].replace('.', ',') : null;
+      const end = timeMatch ? timeMatch[2].replace('.', ',') : null;
+      const textLines = lines.slice(timeMatch ? idx + 1 : idx);
+      const cue = { start, end, text: textLines.join('\n') };
+      if (index !== null) cue.index = index;
+      return cue;
+    });
+  }
+
+  // --- VTT -> JSON (WebVTT cues) ---
+
+  function vttToJson(text) {
+    const timeRe = /(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})/;
+    const normalized = text.replace(/\r\n/g, '\n').replace(/^WEBVTT.*\n/, '');
+    const blocks = normalized.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    const cues = [];
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      if (lines[0].startsWith('NOTE')) continue;
+      let idx = 0;
+      let id = null;
+      let timeMatch = lines[0].match(timeRe);
+      if (!timeMatch) {
+        id = lines[0].trim();
+        idx = 1;
+        timeMatch = lines[1] && lines[1].match(timeRe);
+      }
+      if (!timeMatch) continue;
+      const textLines = lines.slice(idx + 1);
+      const cue = { start: timeMatch[1], end: timeMatch[2], text: textLines.join('\n') };
+      if (id) cue.id = id;
+      cues.push(cue);
+    }
+    return cues;
+  }
+
+  // --- RTF -> JSON (best-effort control-word stripping tokenizer, skips font/color/style tables) ---
+
+  function rtfToJson(text) {
+    const skipDestinations = new Set([
+      'fonttbl', 'colortbl', 'stylesheet', 'info', 'generator', 'pict', 'object',
+      'xmlnstbl', 'listtable', 'listoverridetable', 'rsidtbl', 'themedata',
+      'colorschememapping', 'datastore', 'panose', 'latentstyles'
+    ]);
+    let i = 0;
+    const n = text.length;
+    let depth = 0;
+    let skipDepth = null;
+    const out = [];
+    const isAlpha = c => /[a-zA-Z]/.test(c);
+    while (i < n) {
+      const c = text[i];
+      if (c === '{') { depth++; i++; continue; }
+      if (c === '}') {
+        if (skipDepth !== null && depth === skipDepth) skipDepth = null;
+        depth--; i++;
+        continue;
+      }
+      if (c === '\\') {
+        i++;
+        if (i >= n) break;
+        const c2 = text[i];
+        if (c2 === "'") {
+          const hex = text.substr(i + 1, 2);
+          i += 3;
+          if (skipDepth === null) out.push(String.fromCharCode(parseInt(hex, 16)));
+          continue;
+        }
+        if (c2 === '\\' || c2 === '{' || c2 === '}') {
+          i++;
+          if (skipDepth === null) out.push(c2);
+          continue;
+        }
+        if (isAlpha(c2)) {
+          let word = '';
+          while (i < n && isAlpha(text[i])) { word += text[i]; i++; }
+          while (i < n && /[-\d]/.test(text[i])) i++;
+          if (i < n && text[i] === ' ') i++;
+          if (skipDestinations.has(word)) {
+            skipDepth = depth;
+          } else if (skipDepth === null) {
+            if (word === 'par' || word === 'line') out.push('\n');
+            else if (word === 'tab') out.push('\t');
+          }
+          continue;
+        }
+        i++;
+        continue;
+      }
+      if (skipDepth === null) out.push(c);
+      i++;
+    }
+    const paragraphs = out.join('').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean);
+    return { paragraphs };
+  }
+
+  // --- PDF -> JSON (best-effort text extraction: inflate FlateDecode content streams, read Tj/TJ operators) ---
+
+  function unescapePdfString(s) {
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '\\') {
+        const next = s[i + 1];
+        if (next === 'n') { out += '\n'; i++; }
+        else if (next === 'r') { out += '\r'; i++; }
+        else if (next === 't') { out += '\t'; i++; }
+        else if (next === '(' || next === ')' || next === '\\') { out += next; i++; }
+        else if (/[0-7]/.test(next)) {
+          const oct = (s.substr(i + 1, 3).match(/^[0-7]{1,3}/) || [''])[0];
+          out += String.fromCharCode(parseInt(oct, 8));
+          i += oct.length;
+        } else {
+          i++;
+        }
+      } else {
+        out += c;
+      }
+    }
+    return out;
+  }
+
+  function extractPdfText(content, out) {
+    const re = /\(((?:\\.|[^\\()])*)\)\s*Tj|\[((?:\\.|[^\[\]])*)\]\s*TJ|(?:-?\d*\.?\d+\s+){2}Td|T\*|(?:-?\d*\.?\d+\s+){5}-?\d*\.?\d+\s+Tm/g;
+    let m;
+    let line = '';
+    const flush = () => { if (line.trim()) out.push(line.trim()); line = ''; };
+    while ((m = re.exec(content))) {
+      if (m[1] !== undefined) {
+        line += unescapePdfString(m[1]);
+      } else if (m[2] !== undefined) {
+        const inner = /\(((?:\\.|[^\\()])*)\)/g;
+        let im;
+        while ((im = inner.exec(m[2]))) line += unescapePdfString(im[1]);
+      } else {
+        flush();
+      }
+    }
+    flush();
+  }
+
+  async function pdfToJson(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const latin1 = new TextDecoder('latin1');
+    const raw = latin1.decode(bytes);
+
+    const streams = [];
+    const re = /(<<(?:[^<>]|<<[^<>]*>>)*>>)\s*stream\r?\n/g;
+    let match;
+    while ((match = re.exec(raw))) {
+      const dict = match[1];
+      const dataStart = match.index + match[0].length;
+      const endIdx = raw.indexOf('endstream', dataStart);
+      if (endIdx === -1) continue;
+      let dataEnd = endIdx;
+      if (raw[dataEnd - 1] === '\n') dataEnd--;
+      if (raw[dataEnd - 1] === '\r') dataEnd--;
+      streams.push({ dict, bytes: bytes.slice(dataStart, dataEnd) });
+      re.lastIndex = endIdx + 'endstream'.length;
+    }
+
+    const textRuns = [];
+    for (const { dict, bytes: sBytes } of streams) {
+      let contentBytes = sBytes;
+      if (/\/FlateDecode/.test(dict)) {
+        try {
+          const stream = new Blob([sBytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+          contentBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+        } catch (e) {
+          continue;
+        }
+      } else if (/\/Filter/.test(dict)) {
+        continue;
+      }
+      const content = latin1.decode(contentBytes);
+      if (!/\bTj\b|\bTJ\b/.test(content)) continue;
+      extractPdfText(content, textRuns);
+    }
+
+    if (!textRuns.length) {
+      throw new Error('No extractable text found (the PDF may be scanned/image-based, encrypted, or use an unsupported filter)');
+    }
+    return { text: textRuns.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
+  }
+
+  const BINARY_FORMATS = { docx: docxParagraphsWrapper, pdf: pdfToJson };
+  const TEXT_FORMATS = {
+    csv: csvToJson,
+    tsv: tsvToJson,
+    xml: xmlToJson,
+    yaml: parseYaml,
+    yml: parseYaml,
+    ini: iniToJson,
+    conf: iniToJson,
+    txt: txtToJson,
+    log: logToJson,
+    md: markdownToJson,
+    markdown: markdownToJson,
+    html: htmlToJson,
+    htm: htmlToJson,
+    srt: srtToJson,
+    vtt: vttToJson,
+    rtf: rtfToJson
+  };
+
+  async function docxParagraphsWrapper(buffer) {
+    return { paragraphs: await docxToParagraphs(buffer) };
+  }
+
   function loadFile(file) {
     if (!file) return;
     clearError();
     const ext = file.name.split('.').pop().toLowerCase();
 
-    if (ext === 'docx') {
+    if (BINARY_FORMATS[ext]) {
       const reader = new FileReader();
       reader.onerror = () => showError(new Error('Could not read file'));
       reader.onload = async () => {
         try {
-          const paragraphs = await docxToParagraphs(reader.result);
-          input.value = JSON.stringify({ paragraphs }, null, 2);
+          const data = await BINARY_FORMATS[ext](reader.result);
+          input.value = JSON.stringify(data, null, 2);
           updateStats();
           format();
         } catch (err) {
@@ -669,22 +978,15 @@
     reader.onerror = () => showError(new Error('Could not read file'));
     reader.onload = () => {
       const text = reader.result;
-      if (ext === 'json' || !['csv', 'xml', 'yaml', 'yml', 'ini', 'txt'].includes(ext)) {
+      const converter = TEXT_FORMATS[ext];
+      if (ext === 'json' || !converter) {
         input.value = text;
         updateStats();
         format();
         return;
       }
       try {
-        let data;
-        switch (ext) {
-          case 'csv': data = csvToJson(text); break;
-          case 'xml': data = xmlToJson(text); break;
-          case 'yaml': case 'yml': data = parseYaml(text); break;
-          case 'ini': data = iniToJson(text); break;
-          case 'txt': data = txtToJson(text); break;
-        }
-        input.value = JSON.stringify(data, null, 2);
+        input.value = JSON.stringify(converter(text), null, 2);
         updateStats();
         format();
       } catch (err) {
@@ -706,6 +1008,7 @@
     const fmt = exportFormat.value;
     const fileMeta = {
       csv: ['text/csv', 'csv'],
+      tsv: ['text/tab-separated-values', 'tsv'],
       xml: ['application/xml', 'xml'],
       yaml: ['text/yaml', 'yaml'],
       ini: ['text/plain', 'ini'],
@@ -715,6 +1018,7 @@
     try {
       switch (fmt) {
         case 'csv': text = jsonToCsv(data); break;
+        case 'tsv': text = jsonToTsv(data); break;
         case 'xml': text = jsonToXml(data); break;
         case 'yaml': text = jsonToYaml(data); break;
         case 'ini': text = jsonToIni(data); break;
