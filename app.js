@@ -707,6 +707,68 @@
     return blocks;
   }
 
+  // --- JSON -> Markdown ---
+  // If the JSON is a block array shaped like markdownToJson's output, render it back to
+  // real markdown syntax (round-trips). Otherwise render arbitrary JSON as a nested list.
+
+  const MARKDOWN_BLOCK_TYPES = ['heading', 'paragraph', 'list', 'code', 'blockquote', 'hr'];
+
+  function isMarkdownBlockArray(data) {
+    return Array.isArray(data) && data.length > 0 &&
+      data.every(b => b !== null && typeof b === 'object' && MARKDOWN_BLOCK_TYPES.includes(b.type));
+  }
+
+  function markdownBlocksToText(blocks) {
+    return blocks.map(b => {
+      switch (b.type) {
+        case 'heading': return '#'.repeat(Math.min(Math.max(Number(b.level) || 1, 1), 6)) + ' ' + (b.text || '');
+        case 'paragraph': return b.text || '';
+        case 'blockquote': return String(b.text || '').split('\n').map(l => '> ' + l).join('\n');
+        case 'code': return '```' + (b.lang || '') + '\n' + (b.text || '') + '\n```';
+        case 'list': {
+          const items = Array.isArray(b.items) ? b.items : [];
+          return items.map((item, i) => (b.ordered ? `${i + 1}.` : '-') + ' ' + item).join('\n');
+        }
+        case 'hr': return '---';
+        default: return '';
+      }
+    }).join('\n\n');
+  }
+
+  function markdownInline(v) {
+    if (v === null || v === undefined) return '*null*';
+    if (typeof v === 'object') return Array.isArray(v) ? (v.length ? '(...)' : '*(empty array)*') : (Object.keys(v).length ? '(...)' : '*(empty object)*');
+    return String(v).replace(/([*_`[\]\\])/g, '\\$1');
+  }
+
+  function genericJsonToMarkdown(data, depth = 0) {
+    const indent = '  '.repeat(depth);
+    if (Array.isArray(data)) {
+      if (!data.length) return indent + '- *(empty array)*';
+      return data.map(item => {
+        if (item !== null && typeof item === 'object' && Object.keys(item).length) {
+          return indent + '- \n' + genericJsonToMarkdown(item, depth + 1);
+        }
+        return indent + '- ' + markdownInline(item);
+      }).join('\n');
+    }
+    const keys = Object.keys(data);
+    if (!keys.length) return indent + '- *(empty object)*';
+    return keys.map(k => {
+      const v = data[k];
+      if (v !== null && typeof v === 'object' && Object.keys(v).length) {
+        return indent + `- **${k}**:\n` + genericJsonToMarkdown(v, depth + 1);
+      }
+      return indent + `- **${k}**: ${markdownInline(v)}`;
+    }).join('\n');
+  }
+
+  function jsonToMarkdown(data) {
+    if (isMarkdownBlockArray(data)) return markdownBlocksToText(data);
+    if (data !== null && typeof data === 'object') return genericJsonToMarkdown(data);
+    return markdownInline(data);
+  }
+
   // --- HTML -> JSON (via native DOMParser, tag/attributes/children tree) ---
 
   function htmlNodeToJson(node) {
@@ -731,6 +793,51 @@
   function htmlToJson(text) {
     const doc = new DOMParser().parseFromString(text, 'text/html');
     return htmlNodeToJson(doc.body || doc.documentElement);
+  }
+
+  // --- JSON -> HTML ---
+  // If the JSON is a {tag, attributes, children} node shaped like htmlToJson's output,
+  // render it back to real markup (round-trips). Otherwise render arbitrary JSON as a nested <ul>.
+
+  const HTML_VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+
+  function isHtmlNodeShape(data) {
+    return data !== null && typeof data === 'object' && !Array.isArray(data) && typeof data.tag === 'string';
+  }
+
+  function htmlNodeFromJson(node) {
+    if (typeof node === 'string') return escapeHtml(node);
+    if (!isHtmlNodeShape(node)) return escapeHtml(JSON.stringify(node));
+    const tag = sanitizeXmlTag(node.tag);
+    const attrs = node.attributes && typeof node.attributes === 'object'
+      ? Object.entries(node.attributes).map(([k, v]) => ` ${sanitizeXmlTag(k)}="${escapeHtml(String(v))}"`).join('')
+      : '';
+    if (HTML_VOID_TAGS.has(tag)) return `<${tag}${attrs}>`;
+    const children = Array.isArray(node.children) ? node.children.map(htmlNodeFromJson).join('') : '';
+    return `<${tag}${attrs}>${children}</${tag}>`;
+  }
+
+  function genericJsonToHtmlFragment(data) {
+    if (data === null || data === undefined) return '<em>null</em>';
+    if (typeof data !== 'object') return escapeHtml(String(data));
+    if (Array.isArray(data)) {
+      if (!data.length) return '<em>(empty array)</em>';
+      return '<ul>' + data.map(item => `<li>${genericJsonToHtmlFragment(item)}</li>`).join('') + '</ul>';
+    }
+    const keys = Object.keys(data);
+    if (!keys.length) return '<em>(empty object)</em>';
+    return '<ul>' + keys.map(k => `<li><strong>${escapeHtml(k)}</strong>: ${genericJsonToHtmlFragment(data[k])}</li>`).join('') + '</ul>';
+  }
+
+  function jsonToHtml(data) {
+    if (isHtmlNodeShape(data) && data.tag === 'html') {
+      return '<!DOCTYPE html>\n' + htmlNodeFromJson(data) + '\n';
+    }
+    if (isHtmlNodeShape(data) && data.tag === 'body') {
+      return `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>Exported JSON</title>\n</head>\n${htmlNodeFromJson(data)}\n</html>\n`;
+    }
+    const body = isHtmlNodeShape(data) ? htmlNodeFromJson(data) : genericJsonToHtmlFragment(data);
+    return `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>Exported JSON</title>\n</head>\n<body>\n${body}\n</body>\n</html>\n`;
   }
 
   // --- SRT -> JSON (subtitle cues) ---
@@ -1012,7 +1119,9 @@
       xml: ['application/xml', 'xml'],
       yaml: ['text/yaml', 'yaml'],
       ini: ['text/plain', 'ini'],
-      txt: ['text/plain', 'txt']
+      txt: ['text/plain', 'txt'],
+      html: ['text/html', 'html'],
+      md: ['text/markdown', 'md']
     }[fmt];
     let text;
     try {
@@ -1023,6 +1132,8 @@
         case 'yaml': text = jsonToYaml(data); break;
         case 'ini': text = jsonToIni(data); break;
         case 'txt': text = jsonToTxt(data); break;
+        case 'html': text = jsonToHtml(data); break;
+        case 'md': text = jsonToMarkdown(data); break;
       }
     } catch (err) {
       exportResult.innerHTML = `<div class="path-error">${escapeHtml(err.message)}</div>`;

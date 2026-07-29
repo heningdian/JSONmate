@@ -90,7 +90,7 @@
       <details id="convertSection" class="tool-section">
         <summary>Export As</summary>
         <div class="tool-body">
-          <p class="tool-note">Converts the Input JSON to another format and downloads it. DOCX, PDF, RTF, HTML, Markdown, LOG, SRT, and VTT are import-only (via Open File) — generating those from arbitrary JSON isn't a defined conversion.</p>
+          <p class="tool-note">Converts the Input JSON to another format and downloads it. DOCX, PDF, RTF, LOG, SRT, and VTT are import-only (via Open File) — generating those from arbitrary JSON isn't a defined conversion. HTML and Markdown round-trip exactly when the JSON was produced by importing an HTML/MD file; other JSON is rendered as a nested list.</p>
           <label class="indent-label">
             Format:
             <select id="exportFormat">
@@ -100,6 +100,8 @@
               <option value="yaml">YAML</option>
               <option value="ini">INI</option>
               <option value="txt">Plain Text</option>
+              <option value="html">HTML</option>
+              <option value="md">Markdown</option>
             </select>
           </label>
           <div class="tool-actions">
