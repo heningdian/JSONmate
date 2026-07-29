@@ -19,8 +19,8 @@
       <button id="validateBtn" title="Check validity without changing input">Validate</button>
       <button id="copyBtn" title="Copy output to clipboard">Copy</button>
       <button id="downloadBtn" title="Download output as .json file">Download</button>
-      <button id="uploadBtn" title="Open a .json file">Open File</button>
-      <input type="file" id="fileInput" accept=".json,application/json" class="hidden">
+      <button id="uploadBtn" title="Open a file: .json, .csv, .xml, .yaml, .yml, .ini, .txt, or .docx — converted to JSON automatically">Open File</button>
+      <input type="file" id="fileInput" accept=".json,.csv,.xml,.yaml,.yml,.ini,.txt,.docx" class="hidden">
       <button id="clearBtn" title="Clear input and output">Clear</button>
       <label class="indent-label">
         Indent:
@@ -42,7 +42,7 @@
           <span>Input</span>
           <span id="inputStats" class="stats"></span>
         </div>
-        <textarea id="input" spellcheck="false" placeholder="Paste, type, or drag &amp; drop a .json file here..."></textarea>
+        <textarea id="input" spellcheck="false" placeholder="Paste JSON, or drag &amp; drop a .json/.csv/.xml/.yaml/.ini/.txt/.docx file — auto-converted to JSON..."></textarea>
       </div>
 
       <div class="panel">
@@ -84,6 +84,27 @@
             <button id="diffBtn">Compare</button>
           </div>
           <div id="diffResult" class="tool-result"></div>
+        </div>
+      </details>
+
+      <details id="convertSection" class="tool-section">
+        <summary>Export As</summary>
+        <div class="tool-body">
+          <p class="tool-note">Converts the Input JSON to another format and downloads it. DOCX is import-only (via Open File) — generating a Word document from arbitrary JSON isn't a defined conversion.</p>
+          <label class="indent-label">
+            Format:
+            <select id="exportFormat">
+              <option value="csv">CSV</option>
+              <option value="xml">XML</option>
+              <option value="yaml">YAML</option>
+              <option value="ini">INI</option>
+              <option value="txt">Plain Text</option>
+            </select>
+          </label>
+          <div class="tool-actions">
+            <button id="exportConvertBtn">Convert &amp; Download</button>
+          </div>
+          <div id="exportResult" class="tool-result"></div>
         </div>
       </details>
     </section>

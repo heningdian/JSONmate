@@ -31,6 +31,10 @@
   const diffBtn = document.getElementById('diffBtn');
   const diffResult = document.getElementById('diffResult');
 
+  const exportFormat = document.getElementById('exportFormat');
+  const exportConvertBtn = document.getElementById('exportConvertBtn');
+  const exportResult = document.getElementById('exportResult');
+
   let lastParsed;
   let lastParsedOk = false;
   let currentMatches = [];
@@ -258,15 +262,477 @@
     URL.revokeObjectURL(url);
   }
 
+  // --- CSV <-> JSON ---
+
+  function parseCsvRows(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else {
+          field += c;
+        }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\r') {
+        // skip
+      } else if (c === '\n') {
+        row.push(field); rows.push(row); row = []; field = '';
+      } else {
+        field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(r => !(r.length === 1 && r[0] === ''));
+  }
+
+  function csvToJson(text) {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return [];
+    const headers = rows[0];
+    return rows.slice(1).map(r => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = r[i] !== undefined ? r[i] : ''; });
+      return obj;
+    });
+  }
+
+  function csvEscapeField(v) {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function jsonToCsv(data) {
+    const arr = Array.isArray(data) ? data : [data];
+    if (!arr.length) return '';
+    const headerSet = new Set();
+    arr.forEach(row => {
+      if (row !== null && typeof row === 'object' && !Array.isArray(row)) Object.keys(row).forEach(k => headerSet.add(k));
+    });
+    const headers = [...headerSet];
+    if (!headers.length) throw new Error('JSON must be an array of objects to convert to CSV');
+    const lines = [headers.map(csvEscapeField).join(',')];
+    arr.forEach(row => {
+      lines.push(headers.map(h => {
+        const v = row && typeof row === 'object' ? row[h] : undefined;
+        return csvEscapeField(v !== null && typeof v === 'object' ? JSON.stringify(v) : v);
+      }).join(','));
+    });
+    return lines.join('\r\n');
+  }
+
+  // --- XML <-> JSON (via native DOMParser / XMLSerializer) ---
+
+  function xmlToJson(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const errorNode = doc.querySelector('parsererror');
+    if (errorNode) throw new Error('Invalid XML: ' + errorNode.textContent.trim().split('\n')[0]);
+    return { [doc.documentElement.tagName]: xmlNodeToJson(doc.documentElement) };
+  }
+
+  function xmlNodeToJson(node) {
+    const obj = {};
+    for (const attr of node.attributes || []) obj['@' + attr.name] = attr.value;
+    const children = [...node.children];
+    if (children.length === 0) {
+      const text = node.textContent.trim();
+      if (Object.keys(obj).length === 0) return text;
+      if (text) obj['#text'] = text;
+      return obj;
+    }
+    for (const child of children) {
+      const value = xmlNodeToJson(child);
+      if (obj[child.tagName] !== undefined) {
+        if (!Array.isArray(obj[child.tagName])) obj[child.tagName] = [obj[child.tagName]];
+        obj[child.tagName].push(value);
+      } else {
+        obj[child.tagName] = value;
+      }
+    }
+    return obj;
+  }
+
+  function sanitizeXmlTag(name) {
+    const s = String(name).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    return /^[a-zA-Z_]/.test(s) ? s : '_' + s;
+  }
+
+  function buildXmlNode(doc, el, value) {
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach(item => {
+        const child = doc.createElement('item');
+        buildXmlNode(doc, child, item);
+        el.appendChild(child);
+      });
+    } else if (typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) {
+        if (k.startsWith('@')) { el.setAttribute(k.slice(1), v); continue; }
+        if (Array.isArray(v)) {
+          v.forEach(item => {
+            const child = doc.createElement(sanitizeXmlTag(k));
+            buildXmlNode(doc, child, item);
+            el.appendChild(child);
+          });
+        } else {
+          const child = doc.createElement(sanitizeXmlTag(k));
+          buildXmlNode(doc, child, v);
+          el.appendChild(child);
+        }
+      }
+    } else {
+      el.textContent = String(value);
+    }
+  }
+
+  function jsonToXml(data) {
+    const doc = document.implementation.createDocument(null, null, null);
+    const singleKey = (data !== null && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 1)
+      ? Object.keys(data)[0] : null;
+    const rootKey = singleKey || 'root';
+    const rootValue = singleKey ? data[singleKey] : data;
+    const root = doc.createElement(sanitizeXmlTag(rootKey));
+    buildXmlNode(doc, root, rootValue);
+    doc.appendChild(root);
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc);
+  }
+
+  // --- YAML <-> JSON (practical subset: nested maps/sequences, scalars, comments, flow [] {}) ---
+
+  function stripYamlComment(line) {
+    let inS = false, inD = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === "'" && !inD) inS = !inS;
+      else if (c === '"' && !inS) inD = !inD;
+      else if (c === '#' && !inS && !inD && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+    }
+    return line;
+  }
+
+  function unquoteYamlScalar(s) {
+    if (s.startsWith('"') && s.endsWith('"')) return JSON.parse(s);
+    if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1).replace(/''/g, "'");
+    return s;
+  }
+
+  function parseYamlScalar(raw) {
+    const v = raw.trim();
+    if (v === '') return null;
+    if ((v.startsWith('[') && v.endsWith(']')) || (v.startsWith('{') && v.endsWith('}'))) {
+      try { return JSON.parse(v); } catch (e) { /* fall through to string */ }
+    }
+    if (v.startsWith('"') && v.endsWith('"')) return JSON.parse(v);
+    if (v.startsWith("'") && v.endsWith("'")) return v.slice(1, -1).replace(/''/g, "'");
+    if (/^(null|~)$/i.test(v)) return null;
+    if (/^true$/i.test(v)) return true;
+    if (/^false$/i.test(v)) return false;
+    if (/^-?\d+$/.test(v)) return parseInt(v, 10);
+    if (/^-?\d+\.\d+([eE][+-]?\d+)?$/.test(v)) return parseFloat(v);
+    return v;
+  }
+
+  function parseYaml(text) {
+    const lines = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const line = stripYamlComment(raw.replace(/\t/g, '  '));
+      const trimmed = line.trim();
+      if (trimmed === '' || trimmed === '---' || trimmed === '...') continue;
+      lines.push({ indent: line.match(/^ */)[0].length, text: trimmed });
+    }
+    if (!lines.length) return null;
+    let pos = 0;
+    const peek = () => (pos < lines.length ? lines[pos] : null);
+
+    function parseNode(indent) {
+      const first = peek();
+      if (!first || first.indent < indent) return null;
+      if (first.text === '-' || first.text.startsWith('- ')) return parseSeq(first.indent);
+      return parseMap(first.indent);
+    }
+
+    function applyMapLine(obj, content, indent) {
+      const m = content.match(/^("[^"]*"|'[^']*'|[^:]+?):\s*(.*)$/);
+      if (!m) return;
+      const key = unquoteYamlScalar(m[1].trim());
+      const rest = m[2];
+      obj[key] = rest === '' ? (parseNode(indent + 1) ?? '') : parseYamlScalar(rest);
+    }
+
+    function parseMap(indent) {
+      const obj = {};
+      while (peek() && peek().indent === indent && peek().text !== '-' && !peek().text.startsWith('- ')) {
+        const line = lines[pos]; pos++;
+        applyMapLine(obj, line.text, indent);
+      }
+      return obj;
+    }
+
+    function parseSeq(indent) {
+      const arr = [];
+      while (peek() && peek().indent === indent && (peek().text === '-' || peek().text.startsWith('- '))) {
+        const line = lines[pos]; pos++;
+        const rest = line.text === '-' ? '' : line.text.slice(2).trim();
+        if (rest === '') {
+          arr.push(parseNode(indent + 1));
+        } else if (/^("[^"]*"|'[^']*'|[^:]+?):\s*(.*)$/.test(rest)) {
+          const mapIndent = indent + 2;
+          const obj = {};
+          applyMapLine(obj, rest, mapIndent);
+          Object.assign(obj, parseMap(mapIndent));
+          arr.push(obj);
+        } else {
+          arr.push(parseYamlScalar(rest));
+        }
+      }
+      return arr;
+    }
+
+    return parseNode(lines[0].indent);
+  }
+
+  function yamlScalar(v) {
+    if (v === null || v === undefined) return 'null';
+    if (typeof v === 'boolean' || typeof v === 'number') return String(v);
+    const s = String(v);
+    if (s === '') return "''";
+    if (/^\s|\s$/.test(s) || /[:#[\]{}&*!|>'"%@`,]/.test(s) || /^(true|false|null|~|-?\d+(\.\d+)?)$/i.test(s)) {
+      return JSON.stringify(s);
+    }
+    return s;
+  }
+
+  function jsonToYaml(data, indent = 0) {
+    const pad = '  '.repeat(indent);
+    if (data === null || data === undefined) return 'null';
+    if (typeof data !== 'object') return yamlScalar(data);
+    if (Array.isArray(data)) {
+      if (!data.length) return '[]';
+      return data.map(item => {
+        if (item !== null && typeof item === 'object' && Object.keys(item).length) {
+          const nested = jsonToYaml(item, indent + 1).split('\n');
+          return pad + '- ' + nested[0].trim() + (nested.length > 1 ? '\n' + nested.slice(1).join('\n') : '');
+        }
+        return pad + '- ' + (item !== null && typeof item === 'object' ? (Array.isArray(item) ? '[]' : '{}') : yamlScalar(item));
+      }).join('\n');
+    }
+    const keys = Object.keys(data);
+    if (!keys.length) return '{}';
+    return keys.map(k => {
+      const v = data[k];
+      const label = /^[\w.-]+$/.test(k) ? k : JSON.stringify(k);
+      if (v !== null && typeof v === 'object' && Object.keys(v).length) {
+        return pad + label + ':\n' + jsonToYaml(v, indent + 1);
+      }
+      if (v !== null && typeof v === 'object') return pad + label + ': ' + (Array.isArray(v) ? '[]' : '{}');
+      return pad + label + ': ' + yamlScalar(v);
+    }).join('\n');
+  }
+
+  // --- INI <-> JSON ---
+
+  function iniParseValue(v) {
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    if (/^-?\d+$/.test(v)) return parseInt(v, 10);
+    if (/^-?\d+\.\d+$/.test(v)) return parseFloat(v);
+    return v;
+  }
+
+  function iniToJson(text) {
+    const result = {};
+    let current = result;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+      const sectionMatch = line.match(/^\[(.+)\]$/);
+      if (sectionMatch) {
+        const name = sectionMatch[1].trim();
+        result[name] = result[name] || {};
+        current = result[name];
+        continue;
+      }
+      const eq = line.indexOf('=');
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (/^".*"$/.test(value)) value = value.slice(1, -1);
+      current[key] = iniParseValue(value);
+    }
+    return result;
+  }
+
+  function iniFormatValue(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  }
+
+  function jsonToIni(data) {
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      throw new Error('JSON must be an object to convert to INI');
+    }
+    const rootLines = [];
+    const sections = [];
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== null && typeof v === 'object' && !Array.isArray(v)) sections.push(k);
+      else rootLines.push(`${k}=${iniFormatValue(v)}`);
+    }
+    const out = [...rootLines];
+    for (const s of sections) {
+      out.push('', `[${s}]`);
+      for (const [k, v] of Object.entries(data[s])) out.push(`${k}=${iniFormatValue(v)}`);
+    }
+    return out.join('\n');
+  }
+
+  // --- Plain text <-> JSON ---
+
+  function txtToJson(text) {
+    return text;
+  }
+
+  function jsonToTxt(data) {
+    return typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  }
+
+  // --- DOCX -> JSON (import-only: unzip word/document.xml with DecompressionStream, extract paragraph text) ---
+
+  async function extractZipEntryText(buffer, entryName) {
+    const view = new DataView(buffer);
+    const decoder = new TextDecoder();
+    let offset = 0;
+    while (offset + 30 <= buffer.byteLength) {
+      const sig = view.getUint32(offset, true);
+      if (sig !== 0x04034b50) break;
+      const method = view.getUint16(offset + 8, true);
+      const compSize = view.getUint32(offset + 18, true);
+      const nameLen = view.getUint16(offset + 26, true);
+      const extraLen = view.getUint16(offset + 28, true);
+      const nameStart = offset + 30;
+      const name = decoder.decode(new Uint8Array(buffer, nameStart, nameLen));
+      const dataStart = nameStart + nameLen + extraLen;
+      if (name === entryName) {
+        const compData = buffer.slice(dataStart, dataStart + compSize);
+        if (method === 0) return decoder.decode(compData);
+        if (method === 8) {
+          const stream = new Blob([compData]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+          return decoder.decode(await new Response(stream).arrayBuffer());
+        }
+        throw new Error('Unsupported compression method in .docx entry: ' + method);
+      }
+      offset = dataStart + compSize;
+    }
+    return null;
+  }
+
+  async function docxToParagraphs(buffer) {
+    const xml = await extractZipEntryText(buffer, 'word/document.xml');
+    if (!xml) throw new Error('Could not find word/document.xml inside the .docx file');
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    return [...doc.getElementsByTagName('w:p')].map(p =>
+      [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')
+    );
+  }
+
   function loadFile(file) {
     if (!file) return;
+    clearError();
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'docx') {
+      const reader = new FileReader();
+      reader.onerror = () => showError(new Error('Could not read file'));
+      reader.onload = async () => {
+        try {
+          const paragraphs = await docxToParagraphs(reader.result);
+          input.value = JSON.stringify({ paragraphs }, null, 2);
+          updateStats();
+          format();
+        } catch (err) {
+          showError(err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
     const reader = new FileReader();
+    reader.onerror = () => showError(new Error('Could not read file'));
     reader.onload = () => {
-      input.value = reader.result;
-      updateStats();
-      format();
+      const text = reader.result;
+      if (ext === 'json' || !['csv', 'xml', 'yaml', 'yml', 'ini', 'txt'].includes(ext)) {
+        input.value = text;
+        updateStats();
+        format();
+        return;
+      }
+      try {
+        let data;
+        switch (ext) {
+          case 'csv': data = csvToJson(text); break;
+          case 'xml': data = xmlToJson(text); break;
+          case 'yaml': case 'yml': data = parseYaml(text); break;
+          case 'ini': data = iniToJson(text); break;
+          case 'txt': data = txtToJson(text); break;
+        }
+        input.value = JSON.stringify(data, null, 2);
+        updateStats();
+        format();
+      } catch (err) {
+        showError(err);
+      }
     };
     reader.readAsText(file);
+  }
+
+  function runExport() {
+    exportResult.innerHTML = '';
+    let data;
+    try {
+      data = JSON.parse(input.value);
+    } catch (err) {
+      exportResult.innerHTML = `<div class="path-error">Input is not valid JSON: ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+    const fmt = exportFormat.value;
+    const fileMeta = {
+      csv: ['text/csv', 'csv'],
+      xml: ['application/xml', 'xml'],
+      yaml: ['text/yaml', 'yaml'],
+      ini: ['text/plain', 'ini'],
+      txt: ['text/plain', 'txt']
+    }[fmt];
+    let text;
+    try {
+      switch (fmt) {
+        case 'csv': text = jsonToCsv(data); break;
+        case 'xml': text = jsonToXml(data); break;
+        case 'yaml': text = jsonToYaml(data); break;
+        case 'ini': text = jsonToIni(data); break;
+        case 'txt': text = jsonToTxt(data); break;
+      }
+    } catch (err) {
+      exportResult.innerHTML = `<div class="path-error">${escapeHtml(err.message)}</div>`;
+      return;
+    }
+    const [mime, extName] = fileMeta;
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `data.${extName}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    exportResult.innerHTML = `<div class="ok">✓ Downloaded data.${extName}</div>`;
   }
 
   function clearAll() {
@@ -750,6 +1216,7 @@
 
   schemaValidateBtn.addEventListener('click', runSchemaValidation);
   diffBtn.addEventListener('click', runDiff);
+  exportConvertBtn.addEventListener('click', runExport);
 
   ['dragover', 'dragenter'].forEach(evt => {
     input.addEventListener(evt, (e) => {

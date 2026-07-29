@@ -422,6 +422,12 @@ mark.hit.current {
   gap: 0.6rem;
 }
 
+.tool-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .tool-body textarea {
   width: 100%;
   min-height: 140px;
