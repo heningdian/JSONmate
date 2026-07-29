@@ -525,6 +525,13 @@ footer p {
   margin: 0.2rem 0;
 }
 
+.privacy-note {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-bottom: 0.8rem !important;
+}
+
 footer a {
   color: var(--accent);
   text-decoration: none;

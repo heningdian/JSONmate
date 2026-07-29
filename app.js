@@ -1,3 +1,7 @@
+// Privacy invariant: this app must never make network requests (fetch, XHR, WebSocket,
+// beacons, form submissions, etc.) or persist file contents outside the DOM/memory of the
+// current page. All parsing/conversion happens client-side only. Do not add analytics,
+// telemetry, or any call that could send user-opened file data off the device.
 (() => {
   const input = document.getElementById('input');
   const output = document.getElementById('output');
