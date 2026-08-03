@@ -517,30 +517,28 @@ footer {
   text-align: center;
   padding: 1rem;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 footer p {
   margin: 0.2rem 0;
+  font-size: 1rem;
 }
 
 .privacy-note {
-  font-size: 0.78rem;
   font-weight: 400;
   color: var(--muted);
   margin-top: 0.7rem !important;
 }
 
 .copyright {
-  font-size: 0.78rem;
   font-weight: 400;
   color: var(--muted);
   margin-top: 1rem !important;
 }
 
 .rights {
-  font-size: 0.72rem;
   font-weight: 400;
   color: var(--muted);
   margin-top: 0.15rem !important;
