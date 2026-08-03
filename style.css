@@ -532,6 +532,20 @@ footer p {
   margin-top: 0.7rem !important;
 }
 
+.copyright {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 1rem !important;
+}
+
+.rights {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 0.15rem !important;
+}
+
 footer a {
   color: var(--accent);
   text-decoration: none;
@@ -572,4 +586,55 @@ footer a:hover {
 .developer-btn:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
+}
+
+/* Tally.so popup feedback button — floating, bottom-right */
+.tally-float-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 90px;
+  z-index: 9998;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1.2rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.tally-float-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.tally-float-btn:active {
+  transform: translateY(0);
+}
+
+.tally-float-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .tally-float-btn {
+    right: 12px;
+    bottom: 76px;
+    padding: 0.55rem 0.95rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Ko-fi floating chat widget — shrink to half size, anchored at its own bottom-right corner */
+[id^="kofi-widget-overlay"],
+.floatingchat-container-wrap,
+.floatingchat-container-wrap-mobi {
+  transform: scale(0.5);
+  transform-origin: bottom right;
 }

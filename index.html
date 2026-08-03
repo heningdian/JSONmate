@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JSONmate — JSON Formatter &amp; Validator</title>
+<title>toJSON — JSON Formatter &amp; Validator</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>JSONmate</h1>
+    <h1>toJSON</h1>
     <p class="tagline">Convert, format, validate, and explore JSON</p>
   </header>
 
@@ -117,8 +117,33 @@
     <p>Request an app?</p>
     <p><a href="https://www.travelinguist.net" target="_blank" rel="noopener noreferrer" class="developer-btn">DEVELOPER</a></p>
     <p class="privacy-note">🔒 Everything runs locally in your browser. Files you open or convert are never uploaded, transmitted, or stored anywhere.</p>
+    <p class="copyright">toJSON &copy; 2025 Hening Dian Paramita &middot; <a href="https://www.travelinguist.net" target="_blank" rel="noopener noreferrer">travelinguist.net</a></p>
+    <p class="rights">All rights reserved.</p>
   </footer>
 
+  <button
+    id="tallyFloatBtn"
+    class="tally-float-btn"
+    data-tally-open="2Ez29e"
+    data-tally-layout="modal"
+    data-tally-emoji-text="👋"
+    data-tally-emoji-animation="wave"
+    aria-label="Request a feature or give feedback"
+    title="Request a feature or give feedback"
+  >Feedback</button>
+
 <script src="app.js"></script>
+<script async src="https://tally.so/widgets/embed.js"></script>
+<script src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
+<script>
+  if (typeof kofiWidgetOverlay !== 'undefined') {
+    kofiWidgetOverlay.draw('heningdian', {
+      'type': 'floating-chat',
+      'floating-chat.donateButton.text': 'Support me',
+      'floating-chat.donateButton.background-color': '#00b9fe',
+      'floating-chat.donateButton.text-color': '#fff'
+    });
+  }
+</script>
 </body>
 </html>

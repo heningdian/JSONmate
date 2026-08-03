@@ -1,7 +1,9 @@
-// Privacy invariant: this app must never make network requests (fetch, XHR, WebSocket,
-// beacons, form submissions, etc.) or persist file contents outside the DOM/memory of the
-// current page. All parsing/conversion happens client-side only. Do not add analytics,
-// telemetry, or any call that could send user-opened file data off the device.
+// Privacy invariant: the JSON conversion/parsing logic in this file must never make network
+// requests (fetch, XHR, WebSocket, beacons, form submissions, etc.) or persist file contents
+// outside the DOM/memory of the current page. All parsing/conversion happens client-side only.
+// Do not add analytics, telemetry, or any call that could send user-opened file/JSON data off
+// the device. (The Ko-fi/Tally widgets loaded in index.html are unrelated third-party UI embeds
+// with no access to this data — see the Privacy section in README.md.)
 (() => {
   const input = document.getElementById('input');
   const output = document.getElementById('output');

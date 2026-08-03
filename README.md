@@ -1,4 +1,4 @@
-# JSONmate
+# toJSON
 
 A JSON formatter, validator, and multi-format converter — runs entirely in your browser, no build step, no backend, no dependencies.
 
@@ -35,6 +35,12 @@ The GitHub Actions workflow in `.github/workflows/pages.yml` only
 deploys this repository's own source files (`index.html`, `style.css`,
 `app.js`) to GitHub Pages; it has no connection to, and never sees,
 anything a visitor opens in their browser.
+
+The page also loads two optional, unrelated third-party widgets — a
+Ko-fi support button and a Tally feedback form — each from their own
+domain. These are UI-only embeds for support/feedback; neither one has
+any access to, and never receives, any JSON or file content you paste,
+open, or convert on the page.
 
 ## Usage
 
