@@ -526,12 +526,6 @@ footer p {
   font-size: 1rem;
 }
 
-.privacy-note {
-  font-weight: 400;
-  color: var(--muted);
-  margin-top: 0.7rem !important;
-}
-
 .copyright {
   font-weight: 400;
   color: var(--muted);
@@ -551,6 +545,45 @@ footer a {
 
 footer a:hover {
   text-decoration: underline;
+}
+
+.faq-section {
+  width: 40vw;
+  min-width: 280px;
+  max-width: 640px;
+  margin: 1.5rem auto 0.5rem;
+  text-align: left;
+}
+
+.faq-section h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+}
+
+.faq-item {
+  margin-bottom: 0.5rem;
+}
+
+.faq-item summary {
+  font-size: 0.95rem;
+}
+
+.faq-answer {
+  margin: 0;
+  padding: 0 1rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .faq-section {
+    width: 90vw;
+  }
 }
 
 .developer-btn {
