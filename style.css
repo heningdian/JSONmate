@@ -588,13 +588,18 @@ footer a:hover {
   outline-offset: 3px;
 }
 
-/* Tally.so popup feedback button — floating, bottom-right */
-.tally-float-btn {
+/* Floating action buttons (Tally feedback, Ko-fi support) — same size/font, stacked bottom-right.
+   Built as plain same-origin buttons rather than embedding Ko-fi's own widget script: that widget
+   renders inside a cross-origin iframe, whose internal font size a parent page's CSS cannot reach
+   at all, making an exact font match with the Tally button impossible any other way. */
+.floating-action-btn {
   position: fixed;
   right: 20px;
-  bottom: 90px;
   z-index: 9998;
-  background: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
   color: #fff;
   border: none;
   padding: 0.65rem 1.2rem;
@@ -602,39 +607,51 @@ footer a:hover {
   font-size: 0.85rem;
   font-weight: 700;
   font-family: inherit;
+  text-decoration: none !important;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.tally-float-btn:hover {
-  background: var(--accent-hover);
+.floating-action-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
 }
 
-.tally-float-btn:active {
+.floating-action-btn:active {
   transform: translateY(0);
 }
 
-.tally-float-btn:focus-visible {
-  outline: 2px solid var(--accent);
+.floating-action-btn:focus-visible {
+  outline: 2px solid #fff;
   outline-offset: 3px;
 }
 
+.tally-float-btn {
+  bottom: 90px;
+  background: var(--accent);
+}
+
+.tally-float-btn:hover {
+  background: var(--accent-hover);
+}
+
+.kofi-float-btn {
+  bottom: 20px;
+  background: #00b9fe;
+}
+
+.kofi-float-btn:hover {
+  background: #009fdb;
+}
+
 @media (max-width: 480px) {
-  .tally-float-btn {
+  .floating-action-btn {
     right: 12px;
-    bottom: 76px;
+    min-width: 80px;
     padding: 0.55rem 0.95rem;
     font-size: 0.8rem;
   }
-}
-
-/* Ko-fi floating chat widget — shrink to half size, anchored at its own bottom-right corner */
-[id^="kofi-widget-overlay"],
-.floatingchat-container-wrap,
-.floatingchat-container-wrap-mobi {
-  transform: scale(0.5);
-  transform-origin: bottom right;
+  .tally-float-btn { bottom: 76px; }
+  .kofi-float-btn { bottom: 14px; }
 }
